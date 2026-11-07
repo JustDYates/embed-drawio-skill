@@ -4,7 +4,7 @@
 Usage:
   python3 build_viewer.py [--diagram FILE] [--title TITLE] [--out FILE] [--packs default,aws,azure,kubernetes]
 
-With no --diagram, the bundled two-page AWS sample is embedded.
+With no --diagram, the bundled three-page sample (AWS, and Kubernetes on Azure) is embedded.
 Prints the output path, its size, the pages found, and any shape types the
 viewer will not be able to draw (those fall back to plain rectangles).
 """
@@ -164,7 +164,7 @@ def main():
         for f in cfg["scripts"]:
             js = no_script_end(f, asset("shapes/" + f).read())
             shapes |= registered_shapes(js)
-            scripts.append(f"<script>\n/* ===== {f} (jgraph/drawio v24.7.17) ===== */\n{js}\n</script>")
+            scripts.append(f"<script>\n/* ===== {f} (jgraph/drawio v24.7.5) ===== */\n{js}\n</script>")
         for n in cfg["stencils"]:
             xml = no_script_end(n, gzip.decompress(asset(f"stencils/{n}.xml.gz", "rb").read()).decode("utf-8"))
             pkg = re.search(r'<shapes name="([^"]+)"', xml).group(1).lower()
