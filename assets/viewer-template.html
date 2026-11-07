@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>__TITLE_HTML__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --surround: #e9edf1;
+  --panel: #ffffff;
+  --ink: #17202b;
+  --muted: #5b6878;
+  --line: #d3d9e0;
+  --accent: #0b63c4;
+  --accent-soft: #e3eefb;
+  --warn: #9a5b00;
+  --warn-soft: #fff3df;
+  --paper: #ffffff;
+  --grid: #e3e7ec;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surround: #11161c;
+    --panel: #19212a;
+    --ink: #e4e9ef;
+    --muted: #93a0ae;
+    --line: #2d3742;
+    --accent: #5aa2ef;
+    --accent-soft: #1d3247;
+    --warn: #f0b25a;
+    --warn-soft: #3a2c16;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --surround: #11161c;
+  --panel: #19212a;
+  --ink: #e4e9ef;
+  --muted: #93a0ae;
+  --line: #2d3742;
+  --accent: #5aa2ef;
+  --accent-soft: #1d3247;
+  --warn: #f0b25a;
+  --warn-soft: #3a2c16;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font: 400 14px/1.4 "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  min-height: 52px;
+}
+.file {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.file strong {
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 32ch;
+}
+.file span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.spacer { flex: 1; }
+
+button, .btn {
+  font: inherit;
+  font-weight: 500;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  height: 34px;
+  padding: 0 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+button:hover, .btn:hover { border-color: var(--muted); }
+button:focus-visible, .btn:focus-within, .tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.zoom { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; height: 34px; }
+.zoom button { border: 0; height: 32px; border-radius: 6px; padding: 0 10px; }
+.zoom output { min-width: 4.2em; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); }
+.zoom .sep { width: 1px; align-self: stretch; background: var(--line); }
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.tabs[hidden] { display: none; }
+.tab {
+  font: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  height: 38px;
+  padding: 0 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+.stage { position: relative; flex: 1; min-height: 0; background: var(--surround); }
+#canvas {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+  cursor: grab;
+  outline: none;
+}
+#canvas.panning { cursor: grabbing; }
+#canvas.plain { background-image: none; }
+
+.drop {
+  position: absolute;
+  inset: 14px;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-soft) 88%, transparent);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--ink);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.drop.on { opacity: 1; }
+.drop p { margin: 0; font-size: 22px; font-weight: 600; }
+.drop small { display: block; margin-top: 6px; color: var(--muted); font-size: 14px; font-weight: 400; }
+
+.status {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12.5px;
+  min-height: 32px;
+  flex-wrap: wrap;
+}
+.status .warn { color: var(--warn); background: var(--warn-soft); padding: 2px 8px; border-radius: 5px; }
+.status .err { color: var(--warn); font-weight: 500; }
+.status kbd { font: inherit; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.status .credit { margin-left: auto; font-size: 11.5px; }
+.status .credit a { color: inherit; text-underline-offset: 2px; }
+.status .credit a:hover { color: var(--ink); }
+.status .credit a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+@media (max-width: 640px) {
+  .bar { flex-wrap: wrap; }
+  .file { flex: 1 1 100%; order: -1; }
+  .file strong { max-width: 100%; }
+  .hint { display: none; }
+  .spacer { display: none; }
+  .zoom { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
+</style>
+<script>
+window.mxBasePath = 'https://cdn.jsdelivr.net/npm/mxgraph@4.2.2/javascript/src';
+window.mxImageBasePath = window.mxBasePath + '/images';
+window.mxLoadResources = false;
+window.mxLoadStylesheets = false;
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mxgraph@4.2.2/javascript/mxClient.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+</head>
+<body>
+<header class="bar">
+  <div class="file">
+    <strong id="fileName">__TITLE_HTML__</strong>
+    <span id="fileMeta">__META_HTML__</span>
+  </div>
+  <label class="btn primary">
+    <input id="fileInput" type="file" accept=".drawio,.xml,.svg,.dio,text/xml,image/svg+xml">
+    Open diagram
+  </label>
+  <div class="spacer"></div>
+  <div class="zoom" role="group" aria-label="Zoom">
+    <button id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+    <output id="zoomLevel" aria-live="polite">100%</output>
+    <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+    <span class="sep"></span>
+    <button id="zoomFit" title="Fit diagram to window">Fit</button>
+    <button id="zoomReset" title="Actual size">1:1</button>
+  </div>
+</header>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Pages" hidden></nav>
+<main class="stage">
+  <div id="canvas" tabindex="0" aria-label="Diagram"></div>
+  <div class="drop" id="drop"><div><p>Drop to open</p><small>.drawio, .xml or a draw.io SVG export</small></div></div>
+</main>
+<footer class="status" id="status">
+  <span id="stats">Loading shapes…</span>
+  <span id="issues"></span>
+  <span class="hint">Drop or paste a diagram anywhere. <kbd>Ctrl</kbd> + scroll to zoom, drag to pan.</span>
+  <span class="credit">Shapes and stencils by <a href="https://github.com/jgraph/drawio/tree/v24.7.5" target="_blank" rel="noopener">JGraph (draw.io)</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> and <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache 2.0</a>, minified for this page. AWS and Azure icons are the property of Amazon and Microsoft.</span>
+</footer>
+
+<script>
+// Shapes.js expects draw.io's Graph class for its editing handles; the viewer never edits.
+// Third-party code and icons in this page and their licences: see THIRD_PARTY_NOTICES.md in the drawio-viewer skill.
+if (typeof window.Graph === 'undefined') {
+  window.Graph = function () {};
+  window.Graph.prototype.createEdgeHandler = function () { return null; };
+}
+
+// Table helpers ported from draw.io's Graph.js (jgraph/drawio v24.7.5, Apache License 2.0;
+// Copyright JGraph Ltd). Modified: rewritten as functions on mxGraph.prototype for mxGraph 4.2.2,
+// plus the null-geometry guard from current drawio dev (also Apache License 2.0).
+// Needed so table shapes draw their row and column lines.
+(function (p) {
+  if (p.isTable) return;
+  p.isTable = function (cell) {
+    var style = this.getCellStyle(cell);
+    return style != null && style['childLayout'] == 'tableLayout';
+  };
+  p.isTableRow = function (cell) {
+    return this.model.isVertex(cell) && this.isTable(this.model.getParent(cell));
+  };
+  p.isTableCell = function (cell) {
+    return this.model.isVertex(cell) && this.isTableRow(this.model.getParent(cell));
+  };
+  p.visitTableCells = function (cell, visitor) {
+    var lastRow = null;
+    var rows = this.model.getChildCells(cell, true);
+    var start = this.getActualStartSize(cell, true);
+    for (var i = 0; i < rows.length; i++) {
+      var rowStart = this.getActualStartSize(rows[i], true);
+      var cols = this.model.getChildCells(rows[i], true);
+      var rowStyle = this.getCellStyle(rows[i], true);
+      var lastCol = null;
+      var row = [];
+      for (var j = 0; j < cols.length; j++) {
+        var geo = this.getCellGeometry(cols[j]);
+        // Skips cells with no geometry; null keeps lastRow[j] aligned with cols
+        if (geo == null) { row.push(null); continue; }
+        var col = { cell: cols[j], rowspan: 1, colspan: 1, row: i, col: j, geo: geo };
+        geo = (geo.alternateBounds != null) ? geo.alternateBounds : geo;
+        col.point = new mxPoint(geo.width + (lastCol != null ? lastCol.point.x : start.x + rowStart.x),
+          geo.height + (lastRow != null && lastRow[0] != null ? lastRow[0].point.y : start.y + rowStart.y));
+        col.actual = col;
+        if (lastRow != null && lastRow[j] != null && lastRow[j].rowspan > 1) {
+          col.rowspan = lastRow[j].rowspan - 1;
+          col.colspan = lastRow[j].colspan;
+          col.actual = lastRow[j].actual;
+        } else if (lastCol != null && lastCol.colspan > 1) {
+          col.rowspan = lastCol.rowspan;
+          col.colspan = lastCol.colspan - 1;
+          col.actual = lastCol.actual;
+        } else {
+          var style = this.getCurrentCellStyle(cols[j], true);
+          if (style != null) {
+            col.rowspan = parseInt(style['rowspan'] || 1);
+            col.colspan = parseInt(style['colspan'] || 1);
+          }
+        }
+        var head = mxUtils.getValue(rowStyle, mxConstants.STYLE_SWIMLANE_HEAD, 1) == 1 &&
+          mxUtils.getValue(rowStyle, mxConstants.STYLE_STROKECOLOR, mxConstants.NONE) != mxConstants.NONE;
+        visitor(col, cols.length, rows.length,
+          start.x + (head ? rowStart.x : 0),
+          start.y + (head ? rowStart.y : 0));
+        row.push(col);
+        lastCol = col;
+      }
+      lastRow = row;
+    }
+  };
+  p.getTableLines = function (cell, horizontal, vertical) {
+    var hl = [], vl = [];
+    if (horizontal || vertical) {
+      this.visitTableCells(cell, mxUtils.bind(this, function (iter, colCount, rowCount, x0, y0) {
+        if (horizontal && iter.row < rowCount - 1) {
+          if (hl[iter.row] == null) hl[iter.row] = [new mxPoint(x0, iter.point.y)];
+          if (iter.rowspan > 1) hl[iter.row].push(null);
+          hl[iter.row].push(iter.point);
+        }
+        if (vertical && iter.col < colCount - 1) {
+          if (vl[iter.col] == null) vl[iter.col] = [new mxPoint(iter.point.x, y0)];
+          if (iter.colspan > 1) vl[iter.col].push(null);
+          vl[iter.col].push(iter.point);
+        }
+      }));
+    }
+    return hl.concat(vl);
+  };
+})(mxGraph.prototype);
+</script>
+<!--__SHAPE_SCRIPTS__-->
+<script type="text/xml" id="drawio-stylesheet"><!--__STYLESHEET__--></script>
+<!--__STENCIL_SETS__-->
+<!--__IMAGE_LIBS__-->
+<script>window.VIEWER_PACKS = /*__PACKS_JSON__*/;</script>
+<script>window.EMBEDDED_DIAGRAM = /*__DIAGRAM_JSON__*/;</script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var canvas = $('canvas');
+  var statsEl = $('stats');
+  var issuesEl = $('issues');
+
+  if (typeof mxClient === 'undefined' || typeof pako === 'undefined') {
+    statsEl.innerHTML = '<span class="err">The drawing library didn’t load. Check your connection and reload the page.</span>';
+    return;
+  }
+
+  /* ---------- Stencil sets and image libraries ---------- */
+  var stencilCount = 0;
+  Array.prototype.forEach.call(document.querySelectorAll('script.stencil-set'), function (el) {
+    var root = mxUtils.parseXml(el.textContent).documentElement;
+    var pkg = (root.getAttribute('name') || '').toLowerCase();
+    for (var node = root.firstChild; node != null; node = node.nextSibling) {
+      if (node.nodeName === 'shape') {
+        var name = pkg + '.' + node.getAttribute('name').replace(/ /g, '_').toLowerCase();
+        mxStencilRegistry.addStencil(name, new mxStencil(node));
+        stencilCount++;
+      }
+    }
+  });
+
+  var imageLib = {};
+  var imageCount = 0;
+  Array.prototype.forEach.call(document.querySelectorAll('script.image-lib'), function (el) {
+    var lib = JSON.parse(el.textContent);
+    for (var k in lib) { imageLib[k] = lib[k]; imageCount++; }
+  });
+  var imageUris = {};
+  // draw.io stores library icons as app-relative paths like img/lib/azure2/compute/Virtual_Machine.svg
+  function libraryKey(src) {
+    return String(src).replace(/^https?:\/\/[^\/]+\//, '').replace(/^\.?\//, '');
+  }
+  function resolveImage(src) {
+    if (!src || src.substring(0, 5) === 'data:') return src;
+    var key = libraryKey(src);
+    var svg = imageLib[key];
+    if (svg == null) return src;
+    return imageUris[key] || (imageUris[key] = 'data:image/svg+xml,' + encodeURIComponent(svg));
+  }
+
+  /* ---------- Graph ---------- */
+  mxEvent.disableContextMenu(canvas);
+  var graph = new mxGraph(canvas);
+  graph.setEnabled(false);
+  graph.setHtmlLabels(true);
+  graph.setTooltips(false);
+  graph.foldingEnabled = false;
+  graph.border = 0;
+  var postProcessCellStyle = graph.postProcessCellStyle;
+  graph.postProcessCellStyle = function (style) {
+    if (style != null && style[mxConstants.STYLE_IMAGE] != null) {
+      style[mxConstants.STYLE_IMAGE] = resolveImage(style[mxConstants.STYLE_IMAGE]);
+    }
+    return postProcessCellStyle.apply(this, arguments);
+  };
+  graph.isHtmlLabel = function (cell) {
+    var s = this.getCurrentCellStyle(cell);
+    return s != null && s.html == '1';
+  };
+
+  // draw.io's default stylesheet (styles/default.xml, light theme), including the named
+  // styles diagrams start with, such as "ellipse;", "text;", "image;" and "swimlane;"
+  (function () {
+    var node = mxUtils.parseXml($('drawio-stylesheet').textContent).documentElement;
+    new mxCodec(node.ownerDocument).decode(node, graph.getStylesheet());
+  })();
+
+  /* ---------- Parsing draw.io files ---------- */
+  function decompress(data) {
+    var bin = atob(data.replace(/\s+/g, ''));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var text = pako.inflateRaw(bytes, { to: 'string' });
+    try { return decodeURIComponent(text); } catch (e) { return text; }
+  }
+
+  // Maps draw.io-only colour keywords to values plain mxGraph understands
+  function normaliseStyles(xml) {
+    xml = xml.replace(/light-dark\(\s*([^,()]+)\s*,\s*[^()]+\)/g, '$1');
+    return xml.replace(/(fillColor|strokeColor|fontColor|labelBackgroundColor|labelBorderColor|swimlaneFillColor)=default/g,
+      function (m, key) {
+        return key + '=' + ((key === 'fillColor' || key === 'labelBackgroundColor' || key === 'swimlaneFillColor') ? '#ffffff' : '#000000');
+      });
+  }
+
+  function parseDiagramFile(text) {
+    text = String(text).trim();
+    if (text.charAt(0) !== '<') {
+      try { text = decompress(text); } catch (e) { throw new Error('This isn’t a draw.io diagram. Open a .drawio, .xml or draw.io SVG file.'); }
+    }
+    var doc = mxUtils.parseXml(text);
+    var root = doc.documentElement;
+    if (root == null || root.nodeName === 'parsererror' || doc.getElementsByTagName('parsererror').length) {
+      throw new Error('This file isn’t valid XML.');
+    }
+    if (root.nodeName === 'svg') {
+      var content = root.getAttribute('content');
+      if (!content) throw new Error('This SVG has no draw.io diagram inside. Export it from draw.io with “Include a copy of my diagram” turned on.');
+      return parseDiagramFile(content);
+    }
+    if (root.nodeName === 'mxGraphModel') return [{ name: 'Page 1', xml: text }];
+    if (root.nodeName === 'mxfile') {
+      var pages = [];
+      var diagrams = root.getElementsByTagName('diagram');
+      for (var i = 0; i < diagrams.length; i++) {
+        var d = diagrams[i];
+        var model = null;
+        for (var c = d.firstChild; c != null; c = c.nextSibling) {
+          if (c.nodeType === 1 && c.nodeName === 'mxGraphModel') { model = mxUtils.getXml(c); break; }
+        }
+        if (model == null) {
+          var raw = (d.textContent || '').trim();
+          if (!raw) continue;
+          try { model = decompress(raw); } catch (e) { throw new Error('Page “' + (d.getAttribute('name') || i + 1) + '” is damaged and couldn’t be unpacked.'); }
+        }
+        pages.push({ name: d.getAttribute('name') || ('Page ' + (i + 1)), xml: model });
+      }
+      if (!pages.length) throw new Error('This file has no pages.');
+      return pages;
+    }
+    throw new Error('This isn’t a draw.io diagram. Expected <mxfile> or <mxGraphModel>, found <' + root.nodeName + '>.');
+  }
+
+  /* ---------- Viewing ---------- */
+  var pages = [];
+  var current = 0;
+  var PAD = 40;
+  var MIN = 0.05, MAX = 8;
+
+  function modelBounds() {
+    var b = graph.getGraphBounds();
+    var v = graph.view;
+    if (b.width === 0 && b.height === 0) return null;
+    return {
+      x: b.x / v.scale - v.translate.x,
+      y: b.y / v.scale - v.translate.y,
+      w: b.width / v.scale,
+      h: b.height / v.scale
+    };
+  }
+
+  // Places the diagram at the given scale, centred when it fits, padded when it scrolls
+  function layout(scale) {
+    scale = Math.min(MAX, Math.max(MIN, scale));
+    var mb = modelBounds();
+    if (!mb) { graph.view.scaleAndTranslate(scale, 0, 0); updateZoom(); return; }
+    var cw = canvas.clientWidth, ch = canvas.clientHeight;
+    var tx = Math.max(PAD, (cw - mb.w * scale) / 2) / scale - mb.x;
+    var ty = Math.max(PAD, (ch - mb.h * scale) / 2) / scale - mb.y;
+    graph.border = PAD / scale;
+    graph.view.scaleAndTranslate(scale, tx, ty);
+    updateZoom();
+  }
+
+  function fitScale(cap) {
+    var mb = modelBounds();
+    if (!mb) return 1;
+    var s = Math.min((canvas.clientWidth - PAD * 2) / mb.w, (canvas.clientHeight - PAD * 2) / mb.h);
+    return Math.min(cap, Math.max(MIN, s));
+  }
+
+  function zoomAt(scale, clientX, clientY) {
+    var rect = canvas.getBoundingClientRect();
+    if (clientX == null) { clientX = rect.left + canvas.clientWidth / 2; clientY = rect.top + canvas.clientHeight / 2; }
+    var v = graph.view;
+    var ox = clientX - rect.left, oy = clientY - rect.top;
+    var mx = (ox + canvas.scrollLeft) / v.scale - v.translate.x;
+    var my = (oy + canvas.scrollTop) / v.scale - v.translate.y;
+    layout(scale);
+    canvas.scrollLeft = (mx + v.translate.x) * v.scale - ox;
+    canvas.scrollTop = (my + v.translate.y) * v.scale - oy;
+  }
+
+  function updateZoom() {
+    $('zoomLevel').value = Math.round(graph.view.scale * 100) + '%';
+  }
+
+  // Kubernetes icons name their stencil without the package prefix
+  var PR_ICON_PACKAGE = { 'mxgraph.kubernetes.icon': 'mxgraph.kubernetes.', 'mxgraph.kubernetes.icon2': 'mxgraph.kubernetes2.' };
+
+  function findIssues() {
+    var model = graph.getModel();
+    var missing = {};
+    var vertices = 0, edges = 0;
+    for (var id in model.cells) {
+      var cell = model.cells[id];
+      var isEdge = model.isEdge(cell);
+      if (!isEdge && !model.isVertex(cell)) continue;
+      if (isEdge) edges++; else vertices++;
+      var s = graph.getCurrentCellStyle(cell);
+      var sh = s[mxConstants.STYLE_SHAPE];
+      if (sh && !mxCellRenderer.defaultShapes[sh] && !mxStencilRegistry.getStencil(sh)) missing[sh] = true;
+      ['resIcon', 'prIcon', 'grIcon'].forEach(function (k) {
+        var v = s[k];
+        if (!v) return;
+        var full = (k === 'prIcon' && PR_ICON_PACKAGE[sh]) ? PR_ICON_PACKAGE[sh] + v : v;
+        if (!mxStencilRegistry.getStencil(full)) missing[full] = true;
+      });
+      var img = s[mxConstants.STYLE_IMAGE];
+      if (!isEdge && img && String(img).substring(0, 5) !== 'data:' && !imageLib[libraryKey(img)]) {
+        missing['image ' + libraryKey(img)] = true;
+      }
+    }
+    return { vertices: vertices, edges: edges, missing: Object.keys(missing) };
+  }
+
+  function showPage(i) {
+    current = i;
+    var page = pages[i];
+    var doc = mxUtils.parseXml(normaliseStyles(page.xml));
+    var node = doc.documentElement;
+    var model = graph.getModel();
+    model.beginUpdate();
+    try {
+      model.clear();
+      new mxCodec(doc).decode(node, model);
+    } finally {
+      model.endUpdate();
+    }
+    var bg = node.getAttribute('background');
+    canvas.style.backgroundColor = (bg && bg !== 'none') ? bg : '';
+    canvas.classList.toggle('plain', node.getAttribute('grid') === '0');
+
+    graph.view.scaleAndTranslate(1, 0, 0);
+    layout(fitScale(1));
+    canvas.scrollLeft = 0; canvas.scrollTop = 0;
+
+    var tabs = $('tabs').children;
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].setAttribute('aria-selected', t === i ? 'true' : 'false');
+      tabs[t].tabIndex = t === i ? 0 : -1;
+    }
+
+    var info = findIssues();
+    statsEl.textContent = info.vertices + ' shape' + (info.vertices === 1 ? '' : 's') + ', ' +
+      info.edges + ' connector' + (info.edges === 1 ? '' : 's') + ' · ' + (window.VIEWER_PACKS || []).join(', ') + ' shapes loaded';
+    if (info.missing.length) {
+      var icons = info.missing.filter(function (m) { return m.indexOf('image ') === 0; })
+        .map(function (m) { return m.substring(6).split('/').pop().replace(/\.svg$/i, '').replace(/_/g, ' '); });
+      var shapes = info.missing.filter(function (m) { return m.indexOf('image ') !== 0; });
+      var parts = [];
+      if (shapes.length) parts.push(shapes.length + ' shape type' + (shapes.length === 1 ? '' : 's') +
+        ' drawn as plain boxes: ' + shapes.slice(0, 3).join(', ') + (shapes.length > 3 ? '…' : ''));
+      if (icons.length) parts.push(icons.length + ' icon' + (icons.length === 1 ? '' : 's') +
+        ' not bundled: ' + icons.slice(0, 3).join(', ') + (icons.length > 3 ? '…' : ''));
+      issuesEl.className = 'warn';
+      issuesEl.textContent = parts.join('. ');
+      issuesEl.title = info.missing.join('\n');
+    } else {
+      issuesEl.className = '';
+      issuesEl.textContent = '';
+      issuesEl.title = '';
+    }
+  }
+
+  function buildTabs() {
+    var nav = $('tabs');
+    nav.innerHTML = '';
+    nav.hidden = pages.length < 2;
+    pages.forEach(function (p, i) {
+      var b = document.createElement('button');
+      b.className = 'tab';
+      b.setAttribute('role', 'tab');
+      b.textContent = p.name;
+      b.addEventListener('click', function () { showPage(i); });
+      nav.appendChild(b);
+    });
+  }
+
+  function load(text, name, meta) {
+    try {
+      pages = parseDiagramFile(text);
+    } catch (e) {
+      issuesEl.className = 'warn';
+      issuesEl.textContent = (name ? name + ': ' : '') + (e && e.message ? e.message : 'This file couldn’t be read.');
+      return false;
+    }
+    $('fileName').textContent = name;
+    $('fileMeta').textContent = meta + ' · ' + pages.length + ' page' + (pages.length === 1 ? '' : 's');
+    buildTabs();
+    showPage(0);
+    return true;
+  }
+
+  function readFile(file) {
+    if (!file) return;
+    var r = new FileReader();
+    r.onload = function () {
+      var kb = file.size / 1024;
+      load(r.result, file.name, kb < 1024 ? Math.max(1, Math.round(kb)) + ' KB' : (kb / 1024).toFixed(1) + ' MB');
+    };
+    r.onerror = function () {
+      issuesEl.className = 'warn';
+      issuesEl.textContent = file.name + ': the browser couldn’t read this file.';
+    };
+    r.readAsText(file);
+  }
+
+  /* ---------- Controls ---------- */
+  $('fileInput').addEventListener('change', function (e) { readFile(e.target.files[0]); e.target.value = ''; });
+  $('zoomIn').addEventListener('click', function () { zoomAt(graph.view.scale * 1.25); });
+  $('zoomOut').addEventListener('click', function () { zoomAt(graph.view.scale / 1.25); });
+  $('zoomReset').addEventListener('click', function () { zoomAt(1); });
+  $('zoomFit').addEventListener('click', function () { layout(fitScale(4)); canvas.scrollLeft = 0; canvas.scrollTop = 0; });
+
+  $('tabs').addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    var n = (current + (e.key === 'ArrowRight' ? 1 : -1) + pages.length) % pages.length;
+    showPage(n);
+    $('tabs').children[n].focus();
+  });
+
+  canvas.addEventListener('wheel', function (e) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    var factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0025));
+    zoomAt(graph.view.scale * factor, e.clientX, e.clientY);
+  }, { passive: false });
+
+  canvas.addEventListener('keydown', function (e) {
+    if (e.key === '+' || e.key === '=') { zoomAt(graph.view.scale * 1.25); e.preventDefault(); }
+    else if (e.key === '-') { zoomAt(graph.view.scale / 1.25); e.preventDefault(); }
+    else if (e.key === '0') { layout(fitScale(4)); e.preventDefault(); }
+  });
+
+  // Drag to pan with a mouse; touch uses native scrolling
+  var pan = null;
+  canvas.addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    pan = { x: e.clientX, y: e.clientY, sl: canvas.scrollLeft, st: canvas.scrollTop, id: e.pointerId };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add('panning');
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!pan || e.pointerId !== pan.id) return;
+    canvas.scrollLeft = pan.sl - (e.clientX - pan.x);
+    canvas.scrollTop = pan.st - (e.clientY - pan.y);
+  });
+  function endPan(e) {
+    if (!pan || e.pointerId !== pan.id) return;
+    pan = null;
+    canvas.classList.remove('panning');
+  }
+  canvas.addEventListener('pointerup', endPan);
+  canvas.addEventListener('pointercancel', endPan);
+
+  // Drop and paste
+  var drop = $('drop'), depth = 0;
+  document.addEventListener('dragenter', function (e) { e.preventDefault(); depth++; drop.classList.add('on'); });
+  document.addEventListener('dragleave', function () { if (--depth <= 0) { depth = 0; drop.classList.remove('on'); } });
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+  document.addEventListener('drop', function (e) {
+    e.preventDefault(); depth = 0; drop.classList.remove('on');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { readFile(f); return; }
+    var t = e.dataTransfer && e.dataTransfer.getData('text/plain');
+    if (t) load(t, 'Dropped diagram', 'From text');
+  });
+  document.addEventListener('paste', function (e) {
+    var t = e.clipboardData && e.clipboardData.getData('text/plain');
+    if (t && /<(mxfile|mxGraphModel|svg)[\s>]/.test(t)) { e.preventDefault(); load(t, 'Pasted diagram', 'From clipboard'); }
+  });
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { layout(graph.view.scale); }, 80);
+  });
+
+  load(window.EMBEDDED_DIAGRAM, /*__TITLE_JSON__*/, /*__META_JSON__*/);
+})();
+</script>
+</body>
+</html>
