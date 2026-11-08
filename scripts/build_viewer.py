@@ -9,7 +9,9 @@ Prints the output path, its size, the pages found, and any shape types the
 viewer will not be able to draw (those fall back to plain rectangles).
 """
 import argparse, base64, gzip, html, json, os, re, stat, sys, tempfile, urllib.parse, zlib
-import xml.etree.ElementTree as ET
+import xml.parsers.expat
+# ElementTree only ever parses through parse_xml(), which rejects entity declarations first.
+import xml.etree.ElementTree as ET  # nosec B405
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "..", "assets")
@@ -56,7 +58,7 @@ def private_dir(path):
 
 # Claude Code keeps each session's scratchpad under a per-user directory, /tmp/claude-<uid>.
 # It is only trusted when private_dir() confirms it belongs to this user and is not shared.
-CLAUDE_CODE_TMP = f"/tmp/claude-{os.getuid()}" if hasattr(os, "getuid") else None  # NOSONAR(S5443)
+CLAUDE_CODE_TMP = f"/tmp/claude-{os.getuid()}" if hasattr(os, "getuid") else None  # nosec B108 # NOSONAR(S5443)
 
 # Directories --diagram and --out may point into: the directory the script is run from,
 # Claude's sandbox upload/output area and working directory, and, when they are private to
@@ -93,12 +95,29 @@ def decompress(data):
         return raw
 
 
+def parse_xml(text):
+    """Parses untrusted diagram XML, refusing entity declarations.
+
+    Python's ElementTree expands internal entities, so a crafted file ("billion laughs") could
+    use up memory. A first pass with expat raises at the first entity declaration, before any
+    expansion, which is the check defusedxml makes; draw.io files and SVG exports never declare
+    entities. The script stays standard-library only, so defusedxml itself isn't used."""
+    def forbid(*_):
+        raise ValueError("XML entity declarations are not allowed in a diagram.")
+
+    scan = xml.parsers.expat.ParserCreate()
+    scan.EntityDeclHandler = forbid
+    scan.UnparsedEntityDeclHandler = forbid
+    scan.Parse(text.encode("utf-8"), True)
+    return ET.fromstring(text)  # nosec B314 - entity declarations were rejected above
+
+
 def pages_of(text):
     """Returns [(name, model_xml)] using the same rules as the viewer page."""
     text = text.strip()
     if not text.startswith("<"):
         text = decompress(text)
-    root = ET.fromstring(text)
+    root = parse_xml(text)
     tag = root.tag.split("}")[-1]
     if tag == "svg":
         content = root.get("content")
