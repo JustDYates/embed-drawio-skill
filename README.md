@@ -92,6 +92,8 @@ python3 scripts/build_viewer.py --diagram path/to/diagram.drawio --out viewer.ht
 
 The default output path is for Claude's sandbox. When you run the script on your own computer, always pass `--out`.
 
+For safety when an AI agent runs the script, both `--diagram` and `--out` must resolve (after following `..` and symlinks) to a path inside the current working directory, `/mnt/user-data` or `/home/claude` (the last two are Claude's sandbox). `--diagram` must have one of the extensions above, and `--out` must end in `.html` or `.htm`. Run the script from the folder that holds your diagram.
+
 Example output:
 
 ```
