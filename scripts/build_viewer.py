@@ -36,6 +36,25 @@ PACKS = {
 }
 PR_ICON_PACKAGE = {"mxgraph.kubernetes.icon": "mxgraph.kubernetes.", "mxgraph.kubernetes.icon2": "mxgraph.kubernetes2."}
 
+# Directories --diagram and --out may point into: the directory the script is run from,
+# Claude's sandbox upload/output area, and Claude's sandbox working directory.
+ALLOWED_ROOTS = [os.getcwd(), "/mnt/user-data", "/home/claude"]
+DIAGRAM_EXTS = (".drawio", ".dio", ".xml", ".svg")
+OUTPUT_EXTS = (".html", ".htm")
+
+
+def safe_path(path, exts, what):
+    """Canonicalise a CLI-supplied path and reject it unless it sits inside an allowed root
+    and has one of the expected extensions."""
+    resolved = os.path.realpath(path)
+    if not resolved.lower().endswith(exts):
+        raise ValueError(f"{what} {path!r} must end with one of: {', '.join(exts)}")
+    for root in ALLOWED_ROOTS:
+        base = os.path.realpath(root)
+        if resolved.startswith(base.rstrip(os.sep) + os.sep):
+            return resolved
+    raise ValueError(f"{what} {path!r} is outside the allowed directories: {', '.join(ALLOWED_ROOTS)}")
+
 
 def asset(name, mode="r"):
     return open(os.path.join(ASSETS, name), mode, **({} if "b" in mode else {"encoding": "utf-8"}))
@@ -108,10 +127,10 @@ def unsupported(model_xml, shapes, stencils, images):
 def registered_shapes(js):
     """Shape names a shape script registers, resolving Class.prototype.cst.NAME constants."""
     consts = {}
-    for cls, body in re.findall(r"(\w+)\.prototype\.cst\s*=\s*\{([^}]*)\}", js):
-        consts[cls] = dict(re.findall(r"([A-Z0-9_]+)\s*:\s*['\"]([^'\"]+)['\"]", body))
+    for cls, body in re.findall(r"\b(\w+)\.prototype\.cst\s*=\s*\{([^}]*)\}", js):
+        consts[cls] = dict(re.findall(r"\b([A-Z0-9_]+)\s*:\s*['\"]([^'\"]+)['\"]", body))
     names = set()
-    for arg in re.findall(r"registerShape\(\s*([^,]+),", js):
+    for arg in re.findall(r"registerShape\(\s*([^,\s][^,]*),", js):
         arg = arg.strip()
         if arg[0] in "'\"":
             names.add(arg.strip("'\""))
@@ -132,7 +151,12 @@ def main():
     a = ap.parse_args()
 
     if a.diagram:
-        diagram = open(a.diagram, encoding="utf-8").read()
+        try:
+            diagram_path = safe_path(a.diagram, DIAGRAM_EXTS, "--diagram")
+        except ValueError as e:
+            sys.exit(f"ERROR: {e}")
+        with open(diagram_path, encoding="utf-8") as f:
+            diagram = f.read()
         base = os.path.splitext(os.path.basename(a.diagram))[0]
         title = a.title or os.path.basename(a.diagram)
         meta = "Embedded diagram"
@@ -196,7 +220,10 @@ def main():
                 .replace("__META_HTML__", html.escape(meta)))
 
     out = a.out or f"/mnt/user-data/outputs/{re.sub(r'[^A-Za-z0-9_-]+', '-', base).strip('-') or 'drawio'}-viewer.html"
-    out = os.path.abspath(out)
+    try:
+        out = safe_path(out, OUTPUT_EXTS, "--out")
+    except ValueError as e:
+        sys.exit(f"ERROR: {e}")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         f.write(page)
