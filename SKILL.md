@@ -33,7 +33,7 @@ Stencils are registered the way draw.io does it: package name + `.` + shape name
 
 1. **Get the diagram onto disk.**
    - Uploaded file: it's in `/mnt/user-data/uploads/`.
-   - A diagram Claude made in this chat: use the file it wrote.
+   - A diagram Claude made in this chat: use the file it wrote, as long as it's under `/home/claude/` or `/mnt/user-data/`. If it's anywhere else (for example `/tmp`), copy it to `/home/claude/` first.
    - Pasted XML: write it to `/home/claude/diagram.drawio` first.
    - No diagram (user just wants the viewer): skip `--diagram`; the sample is embedded and the user can open their own files from the page.
    - PNG exports with embedded diagrams are not supported; ask for the .drawio file or an SVG export instead.
@@ -44,6 +44,7 @@ Stencils are registered the way draw.io does it: package name + `.` + shape name
    ```
    Options: `--title "Payments platform"` (defaults to the file name), `--packs default,aws,azure,kubernetes` (default: all), `--out /mnt/user-data/outputs/name.html`.
    The script prints `OUTPUT`, `SIZE`, `PACKS`, `PAGES` and `UNSUPPORTED`. If it prints `ERROR`, tell the user what was wrong with the file in plain words rather than publishing.
+   For safety, the script only reads and writes inside the current directory, `/home/claude/` and `/mnt/user-data/`. It also only reads diagram files (`.drawio`, `.dio`, `.xml`, `.svg`) and only writes `.html`. An `outside the allowed directories` or `must end with` error means the path broke one of these rules: move or rename the file instead of working around the check.
 
 3. **Publish** with the Artifact tool: `action: "publish"`, `file_path` = the `OUTPUT` path, `favicon: "🗺️"`, a short `title`. If you already published a viewer earlier in the same conversation and the diagram changed, rebuild and publish again with that artifact's `url` so it updates in place. Don't call `present_files` on a published page. If the user explicitly wants the HTML as a download instead of a hosted page, use `present_files` and don't publish.
 
