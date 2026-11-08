@@ -1,0 +1,30 @@
+name: ASH
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  ash:
+    # Pinned to a full commit SHA (main, 2026-11-07). The latest release, v3.7.1, predates
+    # upload-ash-sarif.yml and the artifact-id output. With ash-version unset, the scan
+    # installs the ASH from this same commit, so the scanner is pinned too.
+    uses: awslabs/automated-security-helper/.github/workflows/run-ash-security-scan.yml@cf27197ed07426a501923ef9489cad9c30e7687d
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    with:
+      ash-args: --fail-on-incomplete-scanners --no-allow-stale-content-db
+      collect-sarif-report: false
+  sarif:
+    needs: ash
+    if: ${{ !cancelled() && needs.ash.outputs.artifact-id != '' }}
+    uses: awslabs/automated-security-helper/.github/workflows/upload-ash-sarif.yml@cf27197ed07426a501923ef9489cad9c30e7687d
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    with:
+      artifact-id: ${{ needs.ash.outputs.artifact-id }}
