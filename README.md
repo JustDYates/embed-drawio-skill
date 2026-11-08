@@ -75,6 +75,8 @@ Once the skill is installed, Claude uses it on its own when it's relevant. For e
 
 Claude builds the page, publishes it as an artifact, and tells you which pages it found and whether any shapes are unsupported. If the diagram changes later in the same conversation, Claude rebuilds the page and updates the same artifact.
 
+In Claude Code, diagrams can't render inline in the terminal or IDE, so this is how you see them. Ask Claude to show a `.drawio` file from your project, or a diagram it has just made (for example with the draw.io MCP server), as a hosted page. Claude builds the page in its scratchpad, publishes it as a private artifact on claude.ai and gives you the link. Nothing is written into your project.
+
 ### Running the build script yourself
 
 The script needs only Python 3, with no extra packages.
@@ -88,11 +90,17 @@ python3 scripts/build_viewer.py --diagram path/to/diagram.drawio --out viewer.ht
 | `--diagram FILE` | Diagram to embed (`.drawio`, `.dio`, `.xml` or draw.io `.svg`) | The bundled `sample.drawio` |
 | `--title TEXT` | Heading shown in the viewer | The file name |
 | `--packs LIST` | Comma-separated packs: `default`, `aws`, `azure`, `kubernetes` | All four |
-| `--out FILE` | Where to write the HTML | `/mnt/user-data/outputs/<name>-viewer.html` |
+| `--out FILE` | Where to write the HTML | `/mnt/user-data/outputs/<name>-viewer.html` in Claude's sandbox, otherwise `<system temp>/drawio-viewer/<name>-viewer.html` |
 
-The default output path is for Claude's sandbox. When you run the script on your own computer, always pass `--out`.
+Without `--out`, the page goes to Claude's sandbox outputs folder when that exists, and otherwise to your system temp directory. The script prints the path. If your temp directory is shared with other users, as `/tmp` usually is on Linux, it uses a new private folder instead.
 
-For safety when an AI agent runs the script, both `--diagram` and `--out` must resolve (after following `..` and symlinks) to a path inside the current working directory, `/mnt/user-data` or `/home/claude` (the last two are Claude's sandbox). `--diagram` must have one of the extensions above, and `--out` must end in `.html` or `.htm`. Run the script from the folder that holds your diagram.
+For safety when an AI agent runs the script, both `--diagram` and `--out` must resolve (after following `..` and symlinks) to a path inside one of these:
+
+- the current working directory
+- `/mnt/user-data` or `/home/claude` (Claude's sandbox)
+- your system temp directory, or Claude Code's scratchpad area `/tmp/claude-<uid>`, but only when the folder belongs to you and no one else can write to it
+
+A shared, world-writable `/tmp` is never allowed. `--diagram` must have one of the extensions above, and `--out` must end in `.html` or `.htm`. Run the script from the folder that holds your diagram.
 
 Example output:
 

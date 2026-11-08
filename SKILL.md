@@ -1,11 +1,11 @@
 ---
 name: "drawio-viewer"
-description: Show a draw.io / diagrams.net diagram as a published, interactive viewer page with draw.io's standard shapes (General, Misc, Advanced, UML, Basic, Arrows, Flowchart), AWS4 icons, Azure icons and Kubernetes icons, pages as tabs, zoom and pan. Use this whenever the user uploads or pastes a .drawio, .dio, .xml (mxfile / mxGraphModel) or draw.io SVG export and wants to see, preview, open, render, share or check it; whenever Claude has just produced a .drawio file (for example with the aws-architecture-diagram skill) and the user would benefit from seeing it rendered instead of reading XML; and whenever the user asks for "the draw.io viewer", "a drawio viewer", or to view an AWS, Azure, Kubernetes or flowchart diagram in chat. Also use it if the user asks why shapes or cloud icons don't render in a plain mxGraph page.
+description: Show a draw.io / diagrams.net diagram as a published, interactive viewer page with draw.io's standard shapes (General, Misc, Advanced, UML, Basic, Arrows, Flowchart), AWS4 icons, Azure icons and Kubernetes icons, pages as tabs, zoom and pan. Use this whenever the user uploads or pastes a .drawio, .dio, .xml (mxfile / mxGraphModel) or draw.io SVG export and wants to see, preview, open, render, share or check it; whenever Claude has just produced a .drawio file (for example with the aws-architecture-diagram skill) and the user would benefit from seeing it rendered instead of reading XML; whenever the user asks for "the draw.io viewer", "a drawio viewer", or to view an AWS, Azure, Kubernetes or flowchart diagram in chat; and in Claude Code whenever the user wants to see a diagram (including one from the draw.io MCP server) that can't render inline in the terminal or IDE, or asks for it as a hosted page. Also use it if the user asks why shapes or cloud icons don't render in a plain mxGraph page.
 ---
 
 # draw.io viewer
 
-Builds one self-contained HTML page that renders draw.io diagrams with mxGraph 4.2.2 and draw.io's own shape libraries, then publishes it as an artifact. Everything the page needs is bundled here, so it works without network access from the container.
+Builds one self-contained HTML page that renders draw.io diagrams with mxGraph 4.2.2 and draw.io's own shape libraries, then publishes it as an artifact. It works both in the claude.ai / Claude desktop sandbox and in Claude Code. Everything the page needs is bundled here, so the build needs no network access.
 
 ## Shape packs
 
@@ -31,22 +31,40 @@ Stencils are registered the way draw.io does it: package name + `.` + shape name
 
 ## Workflow
 
+The skill runs in two environments. Work out which one you're in first, then follow the matching paths below:
+
+- **claude.ai / Claude desktop sandbox:** `/mnt/user-data/` exists. Uploads are in `/mnt/user-data/uploads/`, and your working directory is `/home/claude/`.
+- **Claude Code:** you're on the user's own machine, usually inside a project folder, and `/mnt/user-data/` doesn't exist. Diagrams can't render inline in the terminal or IDE, and the draw.io MCP server's `create_diagram` view may not show either, so a published viewer page is how the user gets to see a diagram.
+
 1. **Get the diagram onto disk.**
-   - Uploaded file: it's in `/mnt/user-data/uploads/`.
-   - A diagram Claude made in this chat: use the file it wrote, as long as it's under `/home/claude/` or `/mnt/user-data/`. If it's anywhere else (for example `/tmp`), copy it to `/home/claude/` first.
-   - Pasted XML: write it to `/home/claude/diagram.drawio` first.
-   - No diagram (user just wants the viewer): skip `--diagram`; the sample is embedded and the user can open their own files from the page.
-   - PNG exports with embedded diagrams are not supported; ask for the .drawio file or an SVG export instead.
+   - **Uploaded file (sandbox):** it's in `/mnt/user-data/uploads/`.
+   - **File in the project (Claude Code):** use its path as it is. Run the script from the project folder.
+   - **A diagram Claude made in this conversation**, for example draw.io XML written by hand, returned by the draw.io MCP server's `create_diagram`, or made with the aws-architecture-diagram skill: use the file you wrote if there is one. Otherwise, save the XML as a `.drawio` file: in the sandbox, to `/home/claude/diagram.drawio`; in Claude Code, to your scratchpad directory (or the system temp directory if you have none). Don't save it into the user's project unless they ask for that.
+   - **Pasted XML:** save it the same way as a diagram Claude made.
+   - **No diagram** (the user just wants the viewer): skip `--diagram`. The sample is embedded, and the user can open their own files from the page.
+   - PNG exports with embedded diagrams are not supported. Ask for the .drawio file or an SVG export instead.
 
 2. **Build.**
    ```bash
+   # Sandbox
    python3 /path/to/skill/scripts/build_viewer.py --diagram /mnt/user-data/uploads/arch.drawio
+   # Claude Code: run from the project folder, write the page to your scratchpad
+   python3 /path/to/skill/scripts/build_viewer.py --diagram docs/arch.drawio --out <scratchpad>/arch-viewer.html
    ```
-   Options: `--title "Payments platform"` (defaults to the file name), `--packs default,aws,azure,kubernetes` (default: all), `--out /mnt/user-data/outputs/name.html`.
-   The script prints `OUTPUT`, `SIZE`, `PACKS`, `PAGES` and `UNSUPPORTED`. If it prints `ERROR`, tell the user what was wrong with the file in plain words rather than publishing.
-   For safety, the script only reads and writes inside the current directory, `/home/claude/` and `/mnt/user-data/`. It also only reads diagram files (`.drawio`, `.dio`, `.xml`, `.svg`) and only writes `.html`. An `outside the allowed directories` or `must end with` error means the path broke one of these rules: move or rename the file instead of working around the check.
+   Options:
+   - `--title "Payments platform"` sets the heading. It defaults to the file name.
+   - `--packs default,aws,azure,kubernetes` chooses the shape packs. The default is all four; embed only the ones the diagram uses to keep the page small.
+   - `--out FILE` sets where the page is written. Without it, the page goes to `/mnt/user-data/outputs/` in the sandbox, and to a `drawio-viewer` folder in the system temp directory elsewhere. In Claude Code, pass `--out` with a path in your scratchpad so the page stays in one known place you can publish from and rebuild over.
 
-3. **Publish** with the Artifact tool: `action: "publish"`, `file_path` = the `OUTPUT` path, `favicon: "🗺️"`, a short `title`. If you already published a viewer earlier in the same conversation and the diagram changed, rebuild and publish again with that artifact's `url` so it updates in place. Don't call `present_files` on a published page. If the user explicitly wants the HTML as a download instead of a hosted page, use `present_files` and don't publish.
+   The script prints `OUTPUT`, `SIZE`, `PACKS`, `PAGES` and `UNSUPPORTED`. If it prints `ERROR`, tell the user what was wrong with the file in plain words rather than publishing.
+
+   For safety, the script only reads and writes inside these folders: the current directory, `/home/claude/`, `/mnt/user-data/`, and the system temp directory and Claude Code's scratchpad area (`/tmp/claude-<uid>`) when they belong to the user and nobody else can write to them. It also only reads diagram files (`.drawio`, `.dio`, `.xml`, `.svg`) and only writes `.html`. An `outside the allowed directories` or `must end with` error means the path broke one of these rules: move or rename the file instead of working around the check.
+
+3. **Publish** with the Artifact tool: `action: "publish"`, `file_path` set to the `OUTPUT` path, `icon: "diagram"` on the first publish, and a short `title`. (Older versions of the Artifact tool take `favicon: "🗺️"` instead of `icon`.)
+   - **Updating:** if you already published a viewer in this conversation and the diagram changed, rebuild to the same `--out` path and publish that same `file_path` again, so the artifact updates at the same URL. For an artifact from an earlier conversation, pass its `url`.
+   - **Sandbox only:** don't call `present_files` on a published page. If the user explicitly wants the HTML as a download instead of a hosted page, use `present_files` and don't publish.
+   - **Claude Code only:** if the user wants the HTML file instead of a hosted page, give them the `OUTPUT` path (or build with `--out` into their project) and don't publish.
+   - Published pages are private to the user until they share them from the page's Share menu. Say so if the page is meant for someone else.
 
 4. **Report briefly**: the pages it found and, if `UNSUPPORTED` isn't `none`, what will be missing. Shape names there (for example `mxgraph.cisco.*`, `mxgraph.gcp2.*`, `mxgraph.bpmn.*`) are libraries outside these packs and draw as plain rectangles; `image img/lib/...` entries are library icons that aren't bundled and won't show. The page shows the same warning in its status bar.
 
