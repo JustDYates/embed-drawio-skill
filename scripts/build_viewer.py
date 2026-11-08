@@ -8,7 +8,7 @@ With no --diagram, the bundled three-page sample (AWS, and Kubernetes on Azure) 
 Prints the output path, its size, the pages found, and any shape types the
 viewer will not be able to draw (those fall back to plain rectangles).
 """
-import argparse, base64, gzip, html, json, os, re, sys, urllib.parse, zlib
+import argparse, base64, gzip, html, json, os, re, stat, sys, tempfile, urllib.parse, zlib
 import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -36,9 +36,34 @@ PACKS = {
 }
 PR_ICON_PACKAGE = {"mxgraph.kubernetes.icon": "mxgraph.kubernetes.", "mxgraph.kubernetes.icon2": "mxgraph.kubernetes2."}
 
+SANDBOX_OUTPUTS = "/mnt/user-data/outputs"
+
+
+def private_dir(path):
+    """Returns path if it is an existing directory owned by this user that nobody else can
+    write to, else None. Temp locations are only trusted when they pass this check, so a
+    shared, world-writable /tmp is never an allowed root."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    if not stat.S_ISDIR(st.st_mode) or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        return None
+    if hasattr(os, "getuid") and st.st_uid != os.getuid():
+        return None
+    return path
+
+
+# Claude Code keeps each session's scratchpad under a per-user directory, /tmp/claude-<uid>.
+# It is only trusted when private_dir() confirms it belongs to this user and is not shared.
+CLAUDE_CODE_TMP = f"/tmp/claude-{os.getuid()}" if hasattr(os, "getuid") else None  # NOSONAR(S5443)
+
 # Directories --diagram and --out may point into: the directory the script is run from,
-# Claude's sandbox upload/output area, and Claude's sandbox working directory.
-ALLOWED_ROOTS = [os.getcwd(), "/mnt/user-data", "/home/claude"]
+# Claude's sandbox upload/output area and working directory, and, when they are private to
+# this user, the system temp directory and Claude Code's scratchpad area.
+ALLOWED_ROOTS = [os.getcwd(), "/mnt/user-data", "/home/claude"] + [
+    d for d in (tempfile.gettempdir(), CLAUDE_CODE_TMP) if d and private_dir(d)
+]
 DIAGRAM_EXTS = (".drawio", ".dio", ".xml", ".svg")
 OUTPUT_EXTS = (".html", ".htm")
 
@@ -147,7 +172,8 @@ def main():
     ap.add_argument("--title", help="Heading shown in the viewer (default: file name)")
     ap.add_argument("--packs", default="default,aws,azure,kubernetes",
                     help="Comma-separated shape packs to embed: default, aws, azure, kubernetes (default: all)")
-    ap.add_argument("--out", help="Output HTML path (default: /mnt/user-data/outputs/<name>-viewer.html)")
+    ap.add_argument("--out", help="Output HTML path (default: /mnt/user-data/outputs/<name>-viewer.html in "
+                                  "Claude's sandbox, otherwise <system temp>/drawio-viewer/<name>-viewer.html)")
     a = ap.parse_args()
 
     if a.diagram:
@@ -219,7 +245,19 @@ def main():
                 .replace("__TITLE_HTML__", html.escape(title))
                 .replace("__META_HTML__", html.escape(meta)))
 
-    out = a.out or f"/mnt/user-data/outputs/{re.sub(r'[^A-Za-z0-9_-]+', '-', base).strip('-') or 'drawio'}-viewer.html"
+    if a.out:
+        out = a.out
+    else:
+        # claude.ai sandbox: the outputs folder. Anywhere else (e.g. Claude Code): the user's
+        # private temp dir, or a fresh private directory if the temp dir is shared.
+        if os.path.isdir("/mnt/user-data"):
+            out_dir = SANDBOX_OUTPUTS
+        elif private_dir(tempfile.gettempdir()):
+            out_dir = os.path.join(tempfile.gettempdir(), "drawio-viewer")
+        else:
+            out_dir = tempfile.mkdtemp(prefix="drawio-viewer-")
+            ALLOWED_ROOTS.append(out_dir)
+        out = os.path.join(out_dir, f"{re.sub(r'[^A-Za-z0-9_-]+', '-', base).strip('-') or 'drawio'}-viewer.html")
     try:
         out = safe_path(out, OUTPUT_EXTS, "--out")
     except ValueError as e:
